@@ -691,7 +691,6 @@ class LibrariesTesting:
 
             try:
                 with open(pdf_file, 'rb') as f:
-
                     parser = PDFParser(f)
                     doc = PDFDocument(parser)
                     parser.set_document(doc)
