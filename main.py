@@ -237,7 +237,7 @@ class StatisticPlot:
 class LibrariesTesting:
     def __init__(self, path):
         self.path = path
-        self.pdfs = self._prepare_pdfs()
+        self.pdfs = self._prepare_pdfs()[:100]
         self.pdfs_processing_dir = './pdfs_processing_time'
         self.json_path = './processing_stats'
         self.plots_path = './plots'
