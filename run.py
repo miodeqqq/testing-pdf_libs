@@ -13,13 +13,13 @@ def run():
     Retrieve the number of pages for each PDF and generate plots.
     """
 
-    l = LibrariesTesting(
+    lib_test = LibrariesTesting(
         path=sys.argv[1]
     )
 
-    l._launch()
+    lib_test.launch()
 
-    while not l.is_ready:
+    while not lib_test.is_ready:
         continue
     else:
         s = StatisticPlot(

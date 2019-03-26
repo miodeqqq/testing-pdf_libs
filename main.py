@@ -6,13 +6,13 @@ import math
 import os
 import re
 import time
+import ujson as json
 import unicodedata
 import warnings
 from shutil import rmtree
 
 import plotly.graph_objs as go
 import plotly.offline as opy
-import ujson as json
 from PyPDF2 import PdfFileReader
 from PyPDF2.utils import PdfReadError
 from pdfminer.pdfdocument import PDFEncryptionError, PDFDocument
@@ -55,11 +55,8 @@ class StatisticPlot:
         General method to returns data done with given tool.
         """
 
-        try:
-            with open(file_obj, 'r') as data_file:
-                return dict([x.lower().strip().split(';') for x in data_file])
-        except FileNotFoundError:
-            pass
+        with open(file_obj, 'r') as data_file:
+            return dict([x.lower().strip().split(';') for x in data_file])
 
     def _make_layout(self):
         """
@@ -248,8 +245,10 @@ class LibrariesTesting:
         self.plots_path = './plots'
         self.default_time = '{:0.5f}'.format(0)
         self.final_stats_dict = {}
+        self.single_file_stats = {}
         self.tika_url = 'http://localhost:9998/tika'
         self.is_ready = False
+        self.decimal_round = '{0:.5f}'
 
     @staticmethod
     def strip_accents(text):
@@ -281,7 +280,8 @@ class LibrariesTesting:
                      f.endswith('.pdf') and os.path.getsize(os.path.join(r, f)) > 0]
                 )
             ),
-            key=os.path.getsize
+            key=os.path.getsize,
+            reverse=True
         )
 
     def _create_dirs(self):
@@ -362,16 +362,16 @@ class LibrariesTesting:
             file_size = self.convert_size(self.get_file_size(pdf_file))
 
             try:
+                start_time = time.time()
+
                 with open(pdf_file, 'rb') as f:
                     _pdf_data = f.read()
-
-                    start_time = time.time()
 
                     pages_count = len(_regex_pattern.findall(_pdf_data))
 
                     end_time = time.time()
 
-                    single_file_time = '{:0.5f}'.format(end_time - start_time)
+                    single_file_time = self.decimal_round.format(end_time - start_time)
 
                     total_mining_time.append(single_file_time)
 
@@ -402,13 +402,20 @@ class LibrariesTesting:
                 errors.append(error)
                 pass
 
-        total_pages = list(map(int, total_pages))
-        total_errors = len(errors)
-        list_set_errors = list(set(errors))
-        total_parsing_time = sum(list(map(float, total_mining_time)))
+        total_pages, total_errors = list(map(int, total_pages)), len(errors)
+
+        regex_total_pages = sum(total_pages)
+
+        print(
+            Colors.OKBLUE + '[REGEX] Total pages count: {regex_total_pages}'.format(
+                regex_total_pages=regex_total_pages
+            ) + Colors.ENDC
+        )
+
+        list_set_errors, total_parsing_time = list(set(errors)), sum(list(map(float, total_mining_time)))
 
         self.final_stats_dict.update(**{
-            'regex_total_pages': sum(total_pages),
+            'regex_total_pages': regex_total_pages,
             'regex_total_parsing_time': total_parsing_time,
             'regex_errors': {
                 'count': total_errors,
@@ -433,17 +440,17 @@ class LibrariesTesting:
 
             file_size = self.convert_size(self.get_file_size(pdf_file))
 
-            with open(pdf_file, 'rb') as f:
+            try:
                 start_time = time.time()
 
-                try:
+                with open(pdf_file, 'rb') as f:
                     reader = PdfFileReader(f)
 
                     pages_count = reader.getNumPages()
 
                     end_time = time.time()
 
-                    single_file_time = '{:0.5f}'.format(end_time - start_time)
+                    single_file_time = self.decimal_round.format(end_time - start_time)
 
                     total_mining_time.append(single_file_time)
 
@@ -465,22 +472,29 @@ class LibrariesTesting:
                             file_size=file_size
                         ) + Colors.ENDC
                     )
-                except PdfReadError as error:
-                    self._save_mining_time(
-                        item=(filename, self.default_time),
-                        test_type='pypdf2'
-                    )
+            except PdfReadError as error:
+                self._save_mining_time(
+                    item=(filename, self.default_time),
+                    test_type='pypdf2'
+                )
 
-                    errors.append(error)
-                    pass
+                errors.append(error)
+                pass
 
-        total_pages = list(map(int, total_pages))
-        total_errors = len(errors)
-        list_set_errors = list(set(errors))
-        total_parsing_time = sum(list(map(float, total_mining_time)))
+        total_pages, total_errors = list(map(int, total_pages)), len(errors)
+
+        list_set_errors, total_parsing_time = list(set(errors)), sum(list(map(float, total_mining_time)))
+
+        pypdf2_total_pages = sum(total_pages)
+
+        print(
+            Colors.OKGREEN + '[PyPDF2] Total pages count: {pypdf2_total_pages}'.format(
+                pypdf2_total_pages=pypdf2_total_pages
+            ) + Colors.ENDC
+        )
 
         self.final_stats_dict.update(**{
-            'pypdf2_total_pages': sum(total_pages),
+            'pypdf2_total_pages': pypdf2_total_pages,
             'pypdf2_total_parsing_time': total_parsing_time,
             'pypdf2_errors': {
                 'count': total_errors,
@@ -505,36 +519,38 @@ class LibrariesTesting:
 
             file_size = self.convert_size(self.get_file_size(pdf_file))
 
-            start_time = time.time()
-
             try:
-                reader = PdfReader(pdf_file)
-                pages_count = reader.numPages
+                start_time = time.time()
 
-                end_time = time.time()
+                with open(pdf_file, 'rb') as f:
+                    reader = PdfReader(f)
 
-                single_file_time = '{:0.5f}'.format(end_time - start_time)
+                    pages_count = reader.numPages
 
-                total_mining_time.append(single_file_time)
+                    end_time = time.time()
 
-                mining_time = filename, single_file_time
+                    single_file_time = self.decimal_round.format(end_time - start_time)
 
-                self._save_mining_time(
-                    item=mining_time,
-                    test_type='pdfrw'
-                )
+                    total_mining_time.append(single_file_time)
 
-                total_pages.append(pages_count)
+                    mining_time = filename, single_file_time
 
-                print(
-                    Colors.BOLD + '[PDFRW] File {i}/{index}. Total pages: {pages_count} --> "{filename}" - {file_size}'.format(
-                        i=index,
-                        index=len(self.pdfs),
-                        pages_count=pages_count,
-                        filename=filename,
-                        file_size=file_size
-                    ) + Colors.ENDC
-                )
+                    self._save_mining_time(
+                        item=mining_time,
+                        test_type='pdfrw'
+                    )
+
+                    total_pages.append(pages_count)
+
+                    print(
+                        Colors.BOLD + '[PDFRW] File {i}/{index}. Total pages: {pages_count} --> "{filename}" - {file_size}'.format(
+                            i=index,
+                            index=len(self.pdfs),
+                            pages_count=pages_count,
+                            filename=filename,
+                            file_size=file_size
+                        ) + Colors.ENDC
+                    )
             except (ValueError, PdfReadError) as error:
                 self._save_mining_time(
                     item=(filename, self.default_time),
@@ -544,13 +560,20 @@ class LibrariesTesting:
                 errors.append(error)
                 pass
 
-        total_pages = list(map(int, total_pages))
-        total_errors = len(errors)
-        list_set_errors = list(set(errors))
-        total_parsing_time = sum(list(map(float, total_mining_time)))
+        total_pages, total_errors = list(map(int, total_pages)), len(errors)
+
+        list_set_errors, total_parsing_time = list(set(errors)), sum(list(map(float, total_mining_time)))
+
+        pdfrw_total_pages = sum(total_pages)
+
+        print(
+            Colors.BOLD + '[PDFRW] Total pages count: {pdfrw_total_pages}'.format(
+                pdfrw_total_pages=pdfrw_total_pages
+            ) + Colors.ENDC
+        )
 
         self.final_stats_dict.update(**{
-            'pdfrw_total_pages': sum(total_pages),
+            'pdfrw_total_pages': pdfrw_total_pages,
             'pdfrw_total_parsing_time': total_parsing_time,
             'pdfrw_errors': {
                 'count': total_errors,
@@ -575,36 +598,38 @@ class LibrariesTesting:
 
             file_size = self.convert_size(self.get_file_size(pdf_file))
 
-            start_time = time.time()
-
             try:
-                reader = PDFQuery(pdf_file)
-                pages_count = reader.doc.catalog['Pages'].resolve()['Count']
+                start_time = time.time()
 
-                end_time = time.time()
+                with open(pdf_file, 'rb') as f:
+                    reader = PDFQuery(f)
 
-                single_file_time = '{:0.5f}'.format(end_time - start_time)
+                    pages_count = reader.doc.catalog['Pages'].resolve()['Count']
 
-                total_mining_time.append(single_file_time)
+                    end_time = time.time()
 
-                mining_time = filename, single_file_time
+                    single_file_time = self.decimal_round.format(end_time - start_time)
 
-                self._save_mining_time(
-                    item=mining_time,
-                    test_type='pdfquery'
-                )
+                    total_mining_time.append(single_file_time)
 
-                total_pages.append(pages_count)
+                    mining_time = filename, single_file_time
 
-                print(
-                    Colors.FAIL + '[PDFQUERY] File {i}/{index}. Total pages: {pages_count} --> "{filename}" - {file_size}'.format(
-                        i=index,
-                        index=len(self.pdfs),
-                        pages_count=pages_count,
-                        filename=filename,
-                        file_size=file_size
-                    ) + Colors.ENDC
-                )
+                    self._save_mining_time(
+                        item=mining_time,
+                        test_type='pdfquery'
+                    )
+
+                    total_pages.append(pages_count)
+
+                    print(
+                        Colors.FAIL + '[PDFQUERY] File {i}/{index}. Total pages: {pages_count} --> "{filename}" - {file_size}'.format(
+                            i=index,
+                            index=len(self.pdfs),
+                            pages_count=pages_count,
+                            filename=filename,
+                            file_size=file_size
+                        ) + Colors.ENDC
+                    )
             except (KeyError, AttributeError, TypeError, PDFSyntaxError, PDFEncryptionError) as error:
                 self._save_mining_time(
                     item=(filename, self.default_time),
@@ -614,13 +639,20 @@ class LibrariesTesting:
                 errors.append(error)
                 pass
 
-        total_pages = map(int, total_pages)
-        total_errors = len(errors)
-        list_set_errors = list(set(errors))
-        total_parsing_time = sum(list(map(float, total_mining_time)))
+        total_pages, total_errors = list(map(int, total_pages)), len(errors)
+
+        list_set_errors, total_parsing_time = list(set(errors)), sum(list(map(float, total_mining_time)))
+
+        pdfquery_total_pages = sum(total_pages)
+
+        print(
+            Colors.FAIL + '[PDFQUERY] Total pages count: {pdfquery_total_pages}'.format(
+                pdfquery_total_pages=pdfquery_total_pages
+            ) + Colors.ENDC
+        )
 
         self.final_stats_dict.update(**{
-            'pdfquery_total_pages': sum(total_pages),
+            'pdfquery_total_pages': pdfquery_total_pages,
             'pdfquery_total_parsing_time': total_parsing_time,
             'pdfquery_errors': {
                 'count': total_errors,
@@ -644,40 +676,41 @@ class LibrariesTesting:
 
             file_size = self.convert_size(self.get_file_size(pdf_file))
 
-            start_time = time.time()
-
             try:
-                reader = parser.from_file(
-                    filename=pdf_file,
-                    serverEndpoint=self.tika_url
-                )
+                start_time = time.time()
 
-                pages_count = reader['metadata'].get('xmpTPg:NPages', 0)
+                with open(pdf_file, 'rb') as f:
+                    reader = parser.from_buffer(
+                        string=f.read(),
+                        serverEndpoint=self.tika_url
+                    )
 
-                end_time = time.time()
+                    pages_count = reader.get('metadata').get('xmpTPg:NPages', 0)
 
-                single_file_time = '{:0.5f}'.format(end_time - start_time)
+                    end_time = time.time()
 
-                total_mining_time.append(single_file_time)
+                    single_file_time = self.decimal_round.format(end_time - start_time)
 
-                mining_time = filename, single_file_time
+                    total_mining_time.append(single_file_time)
 
-                self._save_mining_time(
-                    item=mining_time,
-                    test_type='tika'
-                )
+                    mining_time = filename, single_file_time
 
-                total_pages.append(pages_count)
+                    self._save_mining_time(
+                        item=mining_time,
+                        test_type='tika'
+                    )
 
-                print(
-                    Colors.HEADER + '[APACHE TIKA] File {i}/{index}. Total pages: {pages_count} --> "{filename}" - {file_size}'.format(
-                        i=index,
-                        index=len(self.pdfs),
-                        pages_count=pages_count,
-                        filename=filename,
-                        file_size=file_size
-                    ) + Colors.ENDC
-                )
+                    total_pages.append(pages_count)
+
+                    print(
+                        Colors.HEADER + '[APACHE TIKA] File {i}/{index}. Total pages: {pages_count} --> "{filename}" - {file_size}'.format(
+                            i=index,
+                            index=len(self.pdfs),
+                            pages_count=pages_count,
+                            filename=filename,
+                            file_size=file_size
+                        ) + Colors.ENDC
+                    )
             except (KeyError, AttributeError, TypeError, PDFSyntaxError, PDFEncryptionError) as error:
                 self._save_mining_time(
                     item=(filename, self.default_time),
@@ -687,13 +720,20 @@ class LibrariesTesting:
                 errors.append(error)
                 pass
 
-        total_pages = list(map(int, total_pages))
-        total_errors = len(errors)
-        list_set_errors = list(set(errors))
-        total_parsing_time = sum(list(map(float, total_mining_time)))
+        total_pages, total_errors = list(map(int, total_pages)), len(errors)
+
+        list_set_errors, total_parsing_time = list(set(errors)), sum(list(map(float, total_mining_time)))
+
+        tika_total_pages = sum(total_pages)
+
+        print(
+            Colors.HEADER + '[APACHE TIKA] Total pages count: {tika_total_pages}'.format(
+                tika_total_pages=tika_total_pages
+            ) + Colors.ENDC
+        )
 
         self.final_stats_dict.update(**{
-            'tika_total_pages': sum(total_pages),
+            'tika_total_pages': tika_total_pages,
             'tika_total_parsing_time': total_parsing_time,
             'tika_errors': {
                 'count': total_errors,
@@ -717,11 +757,12 @@ class LibrariesTesting:
 
             file_size = self.convert_size(self.get_file_size(pdf_file))
 
-            start_time = time.time()
-
             try:
+                start_time = time.time()
+
                 with open(pdf_file, 'rb') as f:
                     parser = PDFParser(f)
+
                     doc = PDFDocument(parser)
                     parser.set_document(doc)
 
@@ -730,7 +771,7 @@ class LibrariesTesting:
 
                     end_time = time.time()
 
-                    single_file_time = '{:0.5f}'.format(end_time - start_time)
+                    single_file_time = self.decimal_round.format(end_time - start_time)
 
                     total_mining_time.append(single_file_time)
 
@@ -761,13 +802,20 @@ class LibrariesTesting:
                 errors.append(error)
                 pass
 
-        total_pages = list(map(int, total_pages))
-        total_errors = len(errors)
-        list_set_errors = list(set(errors))
-        total_parsing_time = sum(list(map(float, total_mining_time)))
+        total_pages, total_errors = list(map(int, total_pages)), len(errors)
+
+        list_set_errors, total_parsing_time = list(set(errors)), sum(list(map(float, total_mining_time)))
+
+        pdfminer_total_pages = sum(total_pages)
+
+        print(
+            Colors.CYAN + '[PDFMINER] Total pages count: {pdfminer_total_pages}'.format(
+                pdfminer_total_pages=pdfminer_total_pages
+            ) + Colors.ENDC
+        )
 
         self.final_stats_dict.update(**{
-            'pdfminer_total_pages': sum(total_pages),
+            'pdfminer_total_pages': pdfminer_total_pages,
             'pdfminer_total_parsing_time': total_parsing_time,
             'pdfminer_errors': {
                 'count': total_errors,
@@ -814,7 +862,7 @@ class LibrariesTesting:
 
         return 0
 
-    def _launch(self):
+    def launch(self):
         """
         Runs a pipeline.
         """

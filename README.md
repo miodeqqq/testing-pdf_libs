@@ -6,7 +6,7 @@ Checking performance with reading PDF and:
 
 **Current stable version:** v1.1
 
-**Release date:** 07.08.2018
+**Release date:** 26.03.2019
 
 ### Author:
 Maciej Januszewski (maciek@mjanuszewski.pl)
