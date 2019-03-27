@@ -52,7 +52,7 @@ class StatisticPlot:
 
     def _read(self, file_obj):
         """
-        General method to returns data done with given tool.
+        General method to return data done with given tool.
         """
 
         with open(file_obj, 'r') as data_file:
@@ -248,7 +248,7 @@ class LibrariesTesting:
         self.single_file_stats = {}
         self.tika_url = 'http://localhost:9998/tika'
         self.is_ready = False
-        self.decimal_round = '{0:.5f}'
+        self.decimal_round = '{0:.10f}'
 
     @staticmethod
     def strip_accents(text):

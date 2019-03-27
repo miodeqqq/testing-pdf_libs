@@ -4,7 +4,7 @@ Checking performance with reading PDF and:
 - **gathering info about the number of pages using python libraries.**
 - **... some day ...**
 
-**Current stable version:** v1.1
+**Current stable version:** v1.0
 
 **Release date:** 26.03.2019
 
